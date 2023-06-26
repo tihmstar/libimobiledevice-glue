@@ -27,12 +27,16 @@ struct collection {
 	int capacity;
 };
 
-void collection_init(struct collection *col);
-void collection_add(struct collection *col, void *element);
-int collection_remove(struct collection *col, void *element);
-int collection_count(struct collection *col);
-void collection_free(struct collection *col);
-void collection_copy(struct collection *dest, struct collection *src);
+#ifndef LIBIMOBILEDEVICE_GLUE_API
+#define LIBIMOBILEDEVICE_GLUE_API
+#endif
+
+LIBIMOBILEDEVICE_GLUE_API void collection_init(struct collection *col);
+LIBIMOBILEDEVICE_GLUE_API void collection_add(struct collection *col, void *element);
+LIBIMOBILEDEVICE_GLUE_API int collection_remove(struct collection *col, void *element);
+LIBIMOBILEDEVICE_GLUE_API int collection_count(struct collection *col);
+LIBIMOBILEDEVICE_GLUE_API void collection_free(struct collection *col);
+LIBIMOBILEDEVICE_GLUE_API void collection_copy(struct collection *dest, struct collection *src);
 
 #define MERGE_(a,b) a ## _ ## b
 #define LABEL_(a,b) MERGE_(a, b)

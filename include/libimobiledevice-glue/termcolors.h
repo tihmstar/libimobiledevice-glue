@@ -24,6 +24,10 @@
 #include "config.h"
 #endif
 
+#ifndef LIBIMOBILEDEVICE_GLUE_API
+#define LIBIMOBILEDEVICE_GLUE_API
+#endif
+
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -74,14 +78,14 @@
 #define BG_DEFAULT            "\e[49m"
 
 /* automatically called by library constructor */
-void term_colors_init();
+LIBIMOBILEDEVICE_GLUE_API void term_colors_init();
 
 /* enable / disable terminal colors */
-void term_colors_set_enabled(int en);
+LIBIMOBILEDEVICE_GLUE_API void term_colors_set_enabled(int en);
 
 /* color-aware *printf variants */
-int cprintf(const char* fmt, ...);
-int cfprintf(FILE* stream, const char* fmt, ...);
-int cvfprintf(FILE* stream, const char* fmt, va_list vargs);
+LIBIMOBILEDEVICE_GLUE_API int cprintf(const char* fmt, ...);
+LIBIMOBILEDEVICE_GLUE_API int cfprintf(FILE* stream, const char* fmt, ...);
+LIBIMOBILEDEVICE_GLUE_API int cvfprintf(FILE* stream, const char* fmt, va_list vargs);
 
 #endif

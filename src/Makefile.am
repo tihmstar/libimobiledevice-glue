@@ -21,7 +21,7 @@ libimobiledevice_glue_1_0_la_SOURCES =	\
 
 if WIN32
 libimobiledevice_glue_1_0_la_LDFLAGS += -avoid-version -static-libgcc
-libimobiledevice_glue_1_0_la_LIBADD += -lws2_32 -lIphlpapi
+libimobiledevice_glue_1_0_la_LIBADD += -lws2_32 -liphlpapi
 endif
 
 pkgconfigdir = $(libdir)/pkgconfig

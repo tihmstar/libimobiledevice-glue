@@ -28,8 +28,12 @@ struct char_buf {
 	unsigned int capacity;
 };
 
-struct char_buf* char_buf_new();
-void char_buf_free(struct char_buf* cbuf);
-void char_buf_append(struct char_buf* cbuf, unsigned int length, unsigned char* data);
+#ifndef LIBIMOBILEDEVICE_GLUE_API
+#define LIBIMOBILEDEVICE_GLUE_API
+#endif
+
+LIBIMOBILEDEVICE_GLUE_API struct char_buf* char_buf_new();
+LIBIMOBILEDEVICE_GLUE_API void char_buf_free(struct char_buf* cbuf);
+LIBIMOBILEDEVICE_GLUE_API void char_buf_append(struct char_buf* cbuf, unsigned int length, unsigned char* data);
 
 #endif /* __CBUF_H */

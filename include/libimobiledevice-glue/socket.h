@@ -41,30 +41,34 @@ typedef enum fd_mode fd_mode;
 #include <sys/socket.h>
 #endif
 
-#ifndef WIN32
-int socket_create_unix(const char *filename);
-int socket_connect_unix(const char *filename);
+#ifndef LIBIMOBILEDEVICE_GLUE_API
+#define LIBIMOBILEDEVICE_GLUE_API
 #endif
-int socket_create(const char *addr, uint16_t port);
-int socket_connect_addr(struct sockaddr *addr, uint16_t port);
-int socket_connect(const char *addr, uint16_t port);
-int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout);
-int socket_accept(int fd, uint16_t port);
 
-int socket_shutdown(int fd, int how);
-int socket_close(int fd);
+#ifndef WIN32
+LIBIMOBILEDEVICE_GLUE_API int socket_create_unix(const char *filename);
+LIBIMOBILEDEVICE_GLUE_API int socket_connect_unix(const char *filename);
+#endif
+LIBIMOBILEDEVICE_GLUE_API int socket_create(const char *addr, uint16_t port);
+LIBIMOBILEDEVICE_GLUE_API int socket_connect_addr(struct sockaddr *addr, uint16_t port);
+LIBIMOBILEDEVICE_GLUE_API int socket_connect(const char *addr, uint16_t port);
+LIBIMOBILEDEVICE_GLUE_API int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout);
+LIBIMOBILEDEVICE_GLUE_API int socket_accept(int fd, uint16_t port);
 
-int socket_receive(int fd, void *data, size_t length);
-int socket_peek(int fd, void *data, size_t length);
-int socket_receive_timeout(int fd, void *data, size_t length, int flags, unsigned int timeout);
-int socket_send(int fd, void *data, size_t length);
+LIBIMOBILEDEVICE_GLUE_API int socket_shutdown(int fd, int how);
+LIBIMOBILEDEVICE_GLUE_API int socket_close(int fd);
 
-int socket_get_socket_port(int fd, uint16_t *port);
+LIBIMOBILEDEVICE_GLUE_API int socket_receive(int fd, void *data, size_t length);
+LIBIMOBILEDEVICE_GLUE_API int socket_peek(int fd, void *data, size_t length);
+LIBIMOBILEDEVICE_GLUE_API int socket_receive_timeout(int fd, void *data, size_t length, int flags, unsigned int timeout);
+LIBIMOBILEDEVICE_GLUE_API int socket_send(int fd, void *data, size_t length);
 
-void socket_set_verbose(int level);
+LIBIMOBILEDEVICE_GLUE_API int socket_get_socket_port(int fd, uint16_t *port);
 
-const char *socket_addr_to_string(struct sockaddr *addr, char *addr_out, size_t addr_out_size);
+LIBIMOBILEDEVICE_GLUE_API void socket_set_verbose(int level);
 
-int get_primary_mac_address(unsigned char mac_addr_buf[6]);
+LIBIMOBILEDEVICE_GLUE_API const char *socket_addr_to_string(struct sockaddr *addr, char *addr_out, size_t addr_out_size);
+
+LIBIMOBILEDEVICE_GLUE_API int get_primary_mac_address(unsigned char mac_addr_buf[6]);
 
 #endif	/* SOCKET_SOCKET_H */

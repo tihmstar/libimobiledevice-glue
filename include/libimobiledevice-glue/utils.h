@@ -36,16 +36,20 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifndef LIBIMOBILEDEVICE_GLUE_API
+#define LIBIMOBILEDEVICE_GLUE_API
+#endif
+
 #define MAC_EPOCH 978307200
 
-char *string_concat(const char *str, ...);
-char *string_append(char *str, ...);
-char *string_build_path(const char *elem, ...);
-char *string_format_size(uint64_t size);
-char *string_toupper(char *str);
-char *generate_uuid(void);
+LIBIMOBILEDEVICE_GLUE_API char *string_concat(const char *str, ...);
+LIBIMOBILEDEVICE_GLUE_API char *string_append(char *str, ...);
+LIBIMOBILEDEVICE_GLUE_API char *string_build_path(const char *elem, ...);
+LIBIMOBILEDEVICE_GLUE_API char *string_format_size(uint64_t size);
+LIBIMOBILEDEVICE_GLUE_API char *string_toupper(char *str);
+LIBIMOBILEDEVICE_GLUE_API char *generate_uuid(void);
 
-int buffer_read_from_filename(const char *filename, char **buffer, uint64_t *length);
-int buffer_write_to_filename(const char *filename, const char *buffer, uint64_t length);
+LIBIMOBILEDEVICE_GLUE_API int buffer_read_from_filename(const char *filename, char **buffer, uint64_t *length);
+LIBIMOBILEDEVICE_GLUE_API int buffer_write_to_filename(const char *filename, const char *buffer, uint64_t length);
 
 #endif

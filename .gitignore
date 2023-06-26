@@ -37,3 +37,6 @@ src/libimobiledevice-glue-1.0.pc
 .idea/
 .DS_Store
 .vscode/
+*_buildroot
+*_buildroot_deps
+cache_wrkdir
