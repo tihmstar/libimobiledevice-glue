@@ -206,7 +206,7 @@ static void opack_encode_node(plist_t node, struct char_buf* cbuf)
 						if (len >> 32) {
 							uint8_t blen = 0x94;
 							char_buf_append(cbuf, 1, &blen);
-							uint32_t u64val = htole64(len);
+							uint64_t u64val = htole64(len);
 							char_buf_append(cbuf, 8, (unsigned char*)&u64val);
 						} else {
 							uint8_t blen = 0x93;
@@ -237,7 +237,7 @@ static void opack_encode_node(plist_t node, struct char_buf* cbuf)
 	}
 }
 
-LIBIMOBILEDEVICE_GLUE_API void opack_encode_from_plist(plist_t plist, unsigned char** out, unsigned int* out_len)
+void opack_encode_from_plist(plist_t plist, unsigned char** out, unsigned int* out_len)
 {
 	if (!plist || !out || !out_len) {
 		return;
@@ -304,11 +304,11 @@ static int opack_decode_obj(unsigned char** p, unsigned char* end, plist_t* plis
 		} else if (type == 0x32) {
 			uint32_t u32val = *(uint32_t*)*p;
 			value = (int32_t)le32toh(u32val);
-			(p)+=4;
+			(*p)+=4;
 		} else if (type == 0x33) {
 			uint64_t u64val = *(uint64_t*)*p;
 			value = le64toh(u64val);
-			(p)+=8;
+			(*p)+=8;
 		} else {
 			fprintf(stderr, "%s: ERROR: Invalid encoded byte '%02x'\n", __func__, type);
 			*p = end;
@@ -462,7 +462,7 @@ static int opack_decode_obj(unsigned char** p, unsigned char* end, plist_t* plis
 	return 0;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int opack_decode_to_plist(unsigned char* buf, unsigned int buf_len, plist_t* plist_out)
+int opack_decode_to_plist(unsigned char* buf, unsigned int buf_len, plist_t* plist_out)
 {
 	if (!buf || buf_len == 0 || !plist_out) {
 		return -1;

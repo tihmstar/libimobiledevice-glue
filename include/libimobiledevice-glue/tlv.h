@@ -22,10 +22,7 @@
 #define __TLV_H
 
 #include <stdint.h>
-
-#ifndef LIBIMOBILEDEVICE_GLUE_API
-#define LIBIMOBILEDEVICE_GLUE_API
-#endif
+#include <libimobiledevice-glue/glue.h>
 
 struct tlv_buf {
 	unsigned char* data;
@@ -34,13 +31,13 @@ struct tlv_buf {
 };
 typedef struct tlv_buf* tlv_buf_t;
 
-LIBIMOBILEDEVICE_GLUE_API tlv_buf_t tlv_buf_new();
-LIBIMOBILEDEVICE_GLUE_API void tlv_buf_free(tlv_buf_t tlv);
+LIMD_GLUE_API tlv_buf_t tlv_buf_new();
+LIMD_GLUE_API void tlv_buf_free(tlv_buf_t tlv);
 
-LIBIMOBILEDEVICE_GLUE_API void tlv_buf_append(tlv_buf_t tlv, uint8_t tag, unsigned int length, void* data);
-LIBIMOBILEDEVICE_GLUE_API unsigned char* tlv_get_data_ptr(const void* tlv_data, void* tlv_end, uint8_t tag, uint8_t* length);
-LIBIMOBILEDEVICE_GLUE_API int tlv_data_get_uint(const void* tlv_data, unsigned int tlv_length, uint8_t tag, uint64_t* value);
-LIBIMOBILEDEVICE_GLUE_API int tlv_data_get_uint8(const void* tlv_data, unsigned int tlv_length, uint8_t tag, uint8_t* value);
-LIBIMOBILEDEVICE_GLUE_API int tlv_data_copy_data(const void* tlv_data, unsigned int tlv_length, uint8_t tag, void** out, unsigned int* out_len);
+LIMD_GLUE_API void tlv_buf_append(tlv_buf_t tlv, uint8_t tag, unsigned int length, void* data);
+LIMD_GLUE_API unsigned char* tlv_get_data_ptr(const void* tlv_data, void* tlv_end, uint8_t tag, uint8_t* length);
+LIMD_GLUE_API int tlv_data_get_uint(const void* tlv_data, unsigned int tlv_length, uint8_t tag, uint64_t* value);
+LIMD_GLUE_API int tlv_data_get_uint8(const void* tlv_data, unsigned int tlv_length, uint8_t tag, uint8_t* value);
+LIMD_GLUE_API int tlv_data_copy_data(const void* tlv_data, unsigned int tlv_length, uint8_t tag, void** out, unsigned int* out_len);
 
 #endif /* __TLV_H */

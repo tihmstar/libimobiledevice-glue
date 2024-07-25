@@ -15,7 +15,7 @@ dnl libtool versioning
 #                 changes to the signature and the semantic)
 #  ? :+1 : ?   == just internal changes
 # CURRENT : REVISION : AGE
-LIBIMOBILEDEVICE_GLUE_SO_VERSION=0:0:0
+LIBIMOBILEDEVICE_GLUE_SO_VERSION=3:0:3
 
 # Check if we have a version defined
 if test -z $PACKAGE_VERSION; then
@@ -49,7 +49,9 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT8_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([asprintf strcasecmp strdup strerror strndup stpcpy vasprintf getifaddrs])
+AC_CHECK_FUNCS([asprintf strcasecmp strdup strerror strndup stpcpy vasprintf getifaddrs poll])
+# Checks for additional library requirements
+AC_SEARCH_LIBS(socket, network)
 
 AC_CHECK_HEADER(endian.h, [ac_cv_have_endian_h="yes"], [ac_cv_have_endian_h="no"])
 if test "x$ac_cv_have_endian_h" = "xno"; then
@@ -66,7 +68,7 @@ fi
 # Check for operating system
 AC_MSG_CHECKING([for platform-specific build settings])
 case ${host_os} in
-  *mingw32*|*cygwin*)
+  *mingw32*|*cygwin*|*msys*)
     AC_MSG_RESULT([${host_os}])
     win32=true
     AC_DEFINE(WINVER, 0x0501, [minimum Windows version])
@@ -110,12 +112,12 @@ fi
 AC_CHECK_MEMBER(struct dirent.d_type, AC_DEFINE(HAVE_DIRENT_D_TYPE, 1, [define if struct dirent has member d_type]),, [#include <dirent.h>])
 
 AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wmissing-declarations -Wredundant-decls -Wshadow -Wpointer-arith -Wwrite-strings -Wswitch-default -Wno-unused-parameter -fsigned-char -fvisibility=hidden")
-AC_SUBST(GLOBAL_CFLAGS)
 
-case "$GLOBAL_CFLAGS" in
-  *-fvisibility=hidden*)
-    AC_DEFINE([HAVE_FVISIBILITY], [1], [Define if compiled with -fvisibility=hidden])
-esac
+if test "x$enable_static" = "xyes" -a "x$enable_shared" = "xno"; then
+  GLOBAL_CFLAGS+=" -DLIMD_GLUE_STATIC"
+fi
+
+AC_SUBST(GLOBAL_CFLAGS)
 
 # check for large file support
 AC_SYS_LARGEFILE

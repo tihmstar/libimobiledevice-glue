@@ -22,13 +22,16 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#ifdef WIN32
+#include <windows.h>
+#endif
 #include "common.h"
 #include "libimobiledevice-glue/thread.h"
 
-LIBIMOBILEDEVICE_GLUE_API int thread_new(THREAD_T *thread, thread_func_t thread_func, void* data)
+int thread_new(THREAD_T *thread, thread_func_t thread_func, void* data)
 {
 #ifdef WIN32
-	HANDLE th = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)thread_func, data, 0, NULL);
+	HANDLE th = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)(void*)thread_func, data, 0, NULL);
 	if (th == NULL) {
 		return -1;
 	}
@@ -40,7 +43,7 @@ LIBIMOBILEDEVICE_GLUE_API int thread_new(THREAD_T *thread, thread_func_t thread_
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void thread_detach(THREAD_T thread)
+void thread_detach(THREAD_T thread)
 {
 #ifdef WIN32
 	CloseHandle(thread);
@@ -49,14 +52,14 @@ LIBIMOBILEDEVICE_GLUE_API void thread_detach(THREAD_T thread)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void thread_free(THREAD_T thread)
+void thread_free(THREAD_T thread)
 {
 #ifdef WIN32
 	CloseHandle(thread);
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int thread_join(THREAD_T thread)
+int thread_join(THREAD_T thread)
 {
 	/* wait for thread to complete */
 #ifdef WIN32
@@ -66,7 +69,7 @@ LIBIMOBILEDEVICE_GLUE_API int thread_join(THREAD_T thread)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int thread_alive(THREAD_T thread)
+int thread_alive(THREAD_T thread)
 {
 	if (!thread)
 		return 0;
@@ -77,7 +80,7 @@ LIBIMOBILEDEVICE_GLUE_API int thread_alive(THREAD_T thread)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int thread_cancel(THREAD_T thread)
+int thread_cancel(THREAD_T thread)
 {
 #ifdef WIN32
 	return -1;
@@ -90,43 +93,43 @@ LIBIMOBILEDEVICE_GLUE_API int thread_cancel(THREAD_T thread)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void mutex_init(mutex_t* mutex)
+void mutex_init(mutex_t* mutex)
 {
 #ifdef WIN32
-	InitializeCriticalSection(mutex);
+	InitializeCriticalSection((LPCRITICAL_SECTION)mutex);
 #else
 	pthread_mutex_init(mutex, NULL);
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void mutex_destroy(mutex_t* mutex)
+void mutex_destroy(mutex_t* mutex)
 {
 #ifdef WIN32
-	DeleteCriticalSection(mutex);
+	DeleteCriticalSection((LPCRITICAL_SECTION)mutex);
 #else
 	pthread_mutex_destroy(mutex);
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void mutex_lock(mutex_t* mutex)
+void mutex_lock(mutex_t* mutex)
 {
 #ifdef WIN32
-	EnterCriticalSection(mutex);
+	EnterCriticalSection((LPCRITICAL_SECTION)mutex);
 #else
 	pthread_mutex_lock(mutex);
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void mutex_unlock(mutex_t* mutex)
+void mutex_unlock(mutex_t* mutex)
 {
 #ifdef WIN32
-	LeaveCriticalSection(mutex);
+	LeaveCriticalSection((LPCRITICAL_SECTION)mutex);
 #else
 	pthread_mutex_unlock(mutex);
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void thread_once(thread_once_t *once_control, void (*init_routine)(void))
+void thread_once(thread_once_t *once_control, void (*init_routine)(void))
 {
 #ifdef WIN32
 	while (InterlockedExchange(&(once_control->lock), 1) != 0) {
@@ -142,7 +145,7 @@ LIBIMOBILEDEVICE_GLUE_API void thread_once(thread_once_t *once_control, void (*i
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void cond_init(cond_t* cond)
+void cond_init(cond_t* cond)
 {
 #ifdef WIN32
 	cond->sem = CreateSemaphore(NULL, 0, 32767, NULL);
@@ -151,7 +154,7 @@ LIBIMOBILEDEVICE_GLUE_API void cond_init(cond_t* cond)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API void cond_destroy(cond_t* cond)
+void cond_destroy(cond_t* cond)
 {
 #ifdef WIN32
 	CloseHandle(cond->sem);
@@ -160,7 +163,7 @@ LIBIMOBILEDEVICE_GLUE_API void cond_destroy(cond_t* cond)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int cond_signal(cond_t* cond)
+int cond_signal(cond_t* cond)
 {
 #ifdef WIN32
 	int result = 0;
@@ -173,7 +176,7 @@ LIBIMOBILEDEVICE_GLUE_API int cond_signal(cond_t* cond)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int cond_wait(cond_t* cond, mutex_t* mutex)
+int cond_wait(cond_t* cond, mutex_t* mutex)
 {
 #ifdef WIN32
 	mutex_unlock(mutex);
@@ -189,7 +192,7 @@ LIBIMOBILEDEVICE_GLUE_API int cond_wait(cond_t* cond, mutex_t* mutex)
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int cond_wait_timeout(cond_t* cond, mutex_t* mutex, unsigned int timeout_ms)
+int cond_wait_timeout(cond_t* cond, mutex_t* mutex, unsigned int timeout_ms)
 {
 #ifdef WIN32
 	mutex_unlock(mutex);

@@ -55,7 +55,7 @@ static int wsa_init = 0;
 #ifdef AF_INET6
 #include <net/if.h>
 #include <ifaddrs.h>
-#if defined (__APPLE__) || defined (__FreeBSD__)
+#if defined (__APPLE__) || defined (__FreeBSD__) || defined (__HAIKU__)
 #include <net/if_dl.h>
 #endif
 #ifdef __linux__
@@ -65,6 +65,9 @@ static int wsa_init = 0;
 #endif
 #include "common.h"
 #include "libimobiledevice-glue/socket.h"
+#ifdef HAVE_POLL
+#include <sys/poll.h>
+#endif
 
 #define RECV_TIMEOUT 20000
 #define SEND_TIMEOUT 10000
@@ -82,12 +85,12 @@ static int wsa_init = 0;
 
 static int verbose = 0;
 
-LIBIMOBILEDEVICE_GLUE_API void socket_set_verbose(int level)
+void socket_set_verbose(int level)
 {
 	verbose = level;
 }
 
-LIBIMOBILEDEVICE_GLUE_API const char *socket_addr_to_string(struct sockaddr *addr, char *addr_out, size_t addr_out_size)
+const char *socket_addr_to_string(struct sockaddr *addr, char *addr_out, size_t addr_out_size)
 {
 #ifdef WIN32
 	WSADATA wsa_data;
@@ -140,8 +143,186 @@ LIBIMOBILEDEVICE_GLUE_API const char *socket_addr_to_string(struct sockaddr *add
 	return NULL;
 }
 
+enum poll_status
+{
+	poll_status_success,
+	poll_status_timeout,
+	poll_status_error
+};
+
+#ifdef WIN32
+static inline __attribute__((always_inline)) int WSAError_to_errno(int wsaerr)
+{
+	switch (wsaerr) {
+		case WSAEINVAL:
+			return EINVAL;
+		case WSAENOTSOCK:
+			return ENOTSOCK;
+		case WSAENOTCONN:
+			return ENOTCONN;
+		case WSAESHUTDOWN:
+			return ENOTCONN;
+		case WSAECONNRESET:
+			return ECONNRESET;
+		case WSAECONNABORTED:
+			return ECONNABORTED;
+		case WSAECONNREFUSED:
+			return ECONNREFUSED;
+		case WSAENETDOWN:
+			return ENETDOWN;
+		case WSAENETRESET:
+			return ENETRESET;
+		case WSAEHOSTUNREACH:
+			return EHOSTUNREACH;
+		case WSAETIMEDOUT:
+			return ETIMEDOUT;
+		case WSAEWOULDBLOCK:
+			return EWOULDBLOCK;
+		case WSAEINPROGRESS:
+			return EINPROGRESS;
+		case WSAENOBUFS:
+			return ENOBUFS;
+		case WSAEINTR:
+			return EINTR;
+		case WSAEACCES:
+			return EACCES;
+		case WSAEFAULT:
+			return EFAULT;
+		default:
+			break;
+	}
+	return wsaerr;
+}
+#endif
+
+// timeout of -1 means infinity
+static inline __attribute__((always_inline)) enum poll_status poll_wrapper(int fd, fd_mode mode, int timeout)
+{
+#ifdef HAVE_POLL
+	// https://man7.org/linux/man-pages/man2/select.2.html
+	// Correspondence between select() and poll() notifications
+	// #define POLLIN_SET  (EPOLLRDNORM | EPOLLRDBAND | EPOLLIN |
+	//                      EPOLLHUP | EPOLLERR)
+	//                    /* Ready for reading */
+	// #define POLLOUT_SET (EPOLLWRBAND | EPOLLWRNORM | EPOLLOUT |
+	//                      EPOLLERR)
+	//                    /* Ready for writing */
+	// #define POLLEX_SET  (EPOLLPRI)
+	//                    /* Exceptional condition */
+
+	short events;
+	switch (mode) {
+		case FDM_READ:
+			events = POLLRDNORM | POLLRDBAND | POLLIN | POLLHUP | POLLERR;
+			break;
+		case FDM_WRITE:
+			events = POLLWRBAND | POLLWRNORM | POLLOUT | POLLERR;
+			break;
+		case FDM_EXCEPT:
+			events = POLLPRI;
+			break;
+		default:
+			if (verbose >= 2)
+				fprintf(stderr, "%s: fd_mode %d unsupported\n", __func__, mode);
+			return poll_status_error;
+	}
+	while (1) {
+		struct pollfd pfd = {
+			.fd = fd,
+			.events = events,
+		};
+		switch (poll(&pfd, 1, timeout)) {
+			case 1:
+				if((pfd.revents & (POLLNVAL | POLLERR)) != 0)
+				{
+					if (verbose >= 2)
+						fprintf(stderr, "%s: poll unexpected events: %d\n", __func__, (int)pfd.revents);
+					return poll_status_error;
+				}
+				return poll_status_success;
+			case 0:
+				return poll_status_timeout;
+			case -1:
+				if(errno == EINTR)
+				{
+					if (verbose >= 2)
+						fprintf(stderr, "%s: EINTR\n", __func__);
+					continue;
+				}
+				// fallthrough
+			default:
+				if (verbose >= 2)
+					fprintf(stderr, "%s: poll failed: %s\n", __func__, strerror(errno));
+				return poll_status_error;
+		}
+	}
+#else
+	fd_set fds;
+	int sret;
+	int eagain;
+	struct timeval to;
+	struct timeval *pto;
+
+	FD_ZERO(&fds);
+	FD_SET(fd, &fds);
+
+	sret = poll_status_error;
+
+	do {
+		if (timeout > 0) {
+			to.tv_sec = (time_t) (timeout / 1000);
+			to.tv_usec = (time_t) ((timeout - (to.tv_sec * 1000)) * 1000);
+			pto = &to;
+		} else {
+			pto = NULL;
+		}
+		eagain = 0;
+		switch (mode) {
+		case FDM_READ:
+			sret = select(fd + 1, &fds, NULL, NULL, pto);
+			break;
+		case FDM_WRITE:
+			sret = select(fd + 1, NULL, &fds, NULL, pto);
+			break;
+		case FDM_EXCEPT:
+			sret = select(fd + 1, NULL, NULL, &fds, pto);
+			break;
+		default:
+			if (verbose >= 2)
+				fprintf(stderr, "%s: fd_mode %d unsupported\n", __func__, mode);
+			return poll_status_error;
+		}
+
+		if (sret == 1) {
+			return poll_status_success;
+		} else if (sret == 0) {
+			return poll_status_timeout;
+		} else {
+			switch (errno) {
+			case EINTR:
+				// interrupt signal in select
+				if (verbose >= 2)
+					fprintf(stderr, "%s: EINTR\n", __func__);
+				eagain = 1;
+				break;
+			case EAGAIN:
+				if (verbose >= 2)
+					fprintf(stderr, "%s: EAGAIN\n", __func__);
+				break;
+			default:
+				if (verbose >= 2)
+					fprintf(stderr, "%s: select failed: %s\n", __func__, strerror(errno));
+				return poll_status_error;
+			}
+		}
+	} while (eagain);
+
+	return sret;
+#endif
+}
+
 #ifndef WIN32
-LIBIMOBILEDEVICE_GLUE_API int socket_create_unix(const char *filename)
+int socket_create_unix(const char *filename)
 {
 	struct sockaddr_un name;
 	int sock;
@@ -187,7 +368,7 @@ LIBIMOBILEDEVICE_GLUE_API int socket_create_unix(const char *filename)
 	return sock;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_connect_unix(const char *filename)
+int socket_connect_unix(const char *filename)
 {
 	struct sockaddr_un name;
 	int sfd = -1;
@@ -246,19 +427,21 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect_unix(const char *filename)
 			break;
 		}
 		if (errno == EINPROGRESS) {
-			fd_set fds;
-			FD_ZERO(&fds);
-			FD_SET(sfd, &fds);
-
-			struct timeval timeout;
-			timeout.tv_sec = CONNECT_TIMEOUT / 1000;
-			timeout.tv_usec = (CONNECT_TIMEOUT - (timeout.tv_sec * 1000)) * 1000;
-			if (select(sfd + 1, NULL, &fds, NULL, &timeout) == 1) {
+			if (poll_wrapper(sfd, FDM_WRITE, CONNECT_TIMEOUT) == poll_status_success) {
 				int so_error;
 				socklen_t len = sizeof(so_error);
 				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
 				if (so_error == 0) {
+					errno = 0;
 					break;
+				}
+				errno = so_error;
+			} else {
+				int so_error = 0;
+				socklen_t len = sizeof(so_error);
+				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
+				if (so_error != 0) {
+					errno = so_error;
 				}
 			}
 		}
@@ -276,10 +459,11 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect_unix(const char *filename)
 }
 #endif
 
-LIBIMOBILEDEVICE_GLUE_API int socket_create(const char* addr, uint16_t port)
+int socket_create(const char* addr, uint16_t port)
 {
 	int sfd = -1;
 	int yes = 1;
+	int no = 0;
 	struct addrinfo hints;
 	struct addrinfo *result, *rp;
 	char portstr[8];
@@ -303,9 +487,6 @@ LIBIMOBILEDEVICE_GLUE_API int socket_create(const char* addr, uint16_t port)
 
 	sprintf(portstr, "%d", port);
 
-	if (!addr) {
-		addr = "localhost";
-	}
 	res = getaddrinfo(addr, portstr, &hints, &result);
 	if (res != 0) {
 		fprintf(stderr, "%s: getaddrinfo: %s\n", __func__, gai_strerror(res));
@@ -334,7 +515,7 @@ LIBIMOBILEDEVICE_GLUE_API int socket_create(const char* addr, uint16_t port)
 
 #if defined(AF_INET6) && defined(IPV6_V6ONLY)
 		if (rp->ai_family == AF_INET6) {
-			if (setsockopt(sfd, IPPROTO_IPV6, IPV6_V6ONLY, (void*)&yes, sizeof(int)) == -1) {
+			if (setsockopt(sfd, IPPROTO_IPV6, IPV6_V6ONLY, (addr) ? (void*)&yes : (void*)&no, sizeof(int)) == -1) {
 				perror("setsockopt() IPV6_V6ONLY");
 			}
 		}
@@ -699,7 +880,7 @@ static int getifaddrs(struct ifaddrs** ifap)
 #endif
 #endif
 
-LIBIMOBILEDEVICE_GLUE_API int get_primary_mac_address(unsigned char mac_addr_buf[6])
+int get_primary_mac_address(unsigned char mac_addr_buf[6])
 {
 	int result = -1;
 	struct ifaddrs *ifaddr = NULL, *ifa = NULL;
@@ -714,13 +895,13 @@ LIBIMOBILEDEVICE_GLUE_API int get_primary_mac_address(unsigned char mac_addr_buf
 			if (ifa->ifa_flags & IFF_LOOPBACK) {
 				continue;
 			}
-#if defined(__APPLE__) || defined (__FreeBSD__)
+#if defined(__APPLE__) || defined (__FreeBSD__) || defined (__HAIKU__)
 			if (ifa->ifa_addr->sa_family != AF_LINK) {
 				continue;
 			}
 #if defined (__APPLE__)
 			if (!strcmp(ifa->ifa_name, "en0")) {
-#elif defined (__FreeBSD__)
+#elif defined (__FreeBSD__) || defined (__HAIKU__)
 			{
 #endif
 				memcpy(mac_addr_buf, (unsigned char *)LLADDR((struct sockaddr_dl *)(ifa)->ifa_addr), 6);
@@ -793,10 +974,12 @@ static int32_t _sockaddr_in6_scope_id(struct sockaddr_in6* addr)
 			continue;
 		}
 
+#ifndef __HAIKU__
 		/* skip if not running */
 		if ((ifa->ifa_flags & IFF_RUNNING) == 0) {
 			continue;
 		}
+#endif
 
 		struct sockaddr_in6* addr_in = (struct sockaddr_in6*)ifa->ifa_addr;
 
@@ -846,7 +1029,7 @@ static int32_t _sockaddr_in6_scope_id(struct sockaddr_in6* addr)
 }
 #endif
 
-LIBIMOBILEDEVICE_GLUE_API int socket_connect_addr(struct sockaddr* addr, uint16_t port)
+int socket_connect_addr(struct sockaddr* addr, uint16_t port)
 {
 	int sfd = -1;
 	int yes = 1;
@@ -930,14 +1113,7 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect_addr(struct sockaddr* addr, uint16_
 		if (errno == EINPROGRESS)
 #endif
 		{
-			fd_set fds;
-			FD_ZERO(&fds);
-			FD_SET(sfd, &fds);
-
-			struct timeval timeout;
-			timeout.tv_sec = CONNECT_TIMEOUT / 1000;
-			timeout.tv_usec = (CONNECT_TIMEOUT - (timeout.tv_sec * 1000)) * 1000;
-			if (select(sfd + 1, NULL, &fds, NULL, &timeout) == 1) {
+			if (poll_wrapper(sfd, FDM_WRITE, CONNECT_TIMEOUT) == poll_status_success) {
 				int so_error;
 				socklen_t len = sizeof(so_error);
 				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
@@ -945,7 +1121,20 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect_addr(struct sockaddr* addr, uint16_
 					errno = 0;
 					break;
 				}
+#ifdef WIN32
+				so_error = WSAError_to_errno(so_error);
+#endif
 				errno = so_error;
+			} else {
+				int so_error = 0;
+				socklen_t len = sizeof(so_error);
+				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
+				if (so_error != 0) {
+#ifdef WIN32
+					so_error = WSAError_to_errno(so_error);
+#endif
+					errno = so_error;
+				}
 			}
 		}
 		socket_close(sfd);
@@ -976,7 +1165,7 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect_addr(struct sockaddr* addr, uint16_
 	return sfd;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_connect(const char *addr, uint16_t port)
+int socket_connect(const char *addr, uint16_t port)
 {
 	int sfd = -1;
 	int yes = 1;
@@ -998,11 +1187,6 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect(const char *addr, uint16_t port)
 #else
 	int flags = 0;
 #endif
-
-	if (!addr) {
-		errno = EINVAL;
-		return -1;
-	}
 
 	memset(&hints, '\0', sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
@@ -1054,19 +1238,27 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect(const char *addr, uint16_t port)
 		if (errno == EINPROGRESS)
 #endif
 		{
-			fd_set fds;
-			FD_ZERO(&fds);
-			FD_SET(sfd, &fds);
-
-			struct timeval timeout;
-			timeout.tv_sec = CONNECT_TIMEOUT / 1000;
-			timeout.tv_usec = (CONNECT_TIMEOUT - (timeout.tv_sec * 1000)) * 1000;
-			if (select(sfd + 1, NULL, &fds, NULL, &timeout) == 1) {
+			if (poll_wrapper(sfd, FDM_WRITE, CONNECT_TIMEOUT) == poll_status_success) {
 				int so_error;
 				socklen_t len = sizeof(so_error);
 				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
 				if (so_error == 0) {
+					errno = 0;
 					break;
+				}
+#ifdef WIN32
+				so_error = WSAError_to_errno(so_error);
+#endif
+				errno = so_error;
+			} else {
+				int so_error = 0;
+				socklen_t len = sizeof(so_error);
+				getsockopt(sfd, SOL_SOCKET, SO_ERROR, (void*)&so_error, &len);
+				if (so_error != 0) {
+#ifdef WIN32
+					so_error = WSAError_to_errno(so_error);
+#endif
+					errno = so_error;
 				}
 			}
 		}
@@ -1096,75 +1288,39 @@ LIBIMOBILEDEVICE_GLUE_API int socket_connect(const char *addr, uint16_t port)
 	return sfd;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout)
+int socket_check_fd(int fd, fd_mode fdm, unsigned int timeout)
 {
-	fd_set fds;
-	int sret;
-	int eagain;
-	struct timeval to;
-	struct timeval *pto;
-
 	if (fd < 0) {
 		if (verbose >= 2)
 			fprintf(stderr, "ERROR: invalid fd in check_fd %d\n", fd);
-		return -1;
+		return -EINVAL;
 	}
 
-	FD_ZERO(&fds);
-	FD_SET(fd, &fds);
+	int timeout_ms;
+	if (timeout > 0) {
+		timeout_ms = (int)timeout;
+		if (timeout_ms <= 0)
+			timeout_ms = -1;
+	} else {
+		timeout_ms = -1;
+	}
 
-	sret = -1;
-
-	do {
-		if (timeout > 0) {
-			to.tv_sec = (time_t) (timeout / 1000);
-			to.tv_usec = (time_t) ((timeout - (to.tv_sec * 1000)) * 1000);
-			pto = &to;
-		} else {
-			pto = NULL;
-		}
-		eagain = 0;
-		switch (fdm) {
-		case FDM_READ:
-			sret = select(fd + 1, &fds, NULL, NULL, pto);
-			break;
-		case FDM_WRITE:
-			sret = select(fd + 1, NULL, &fds, NULL, pto);
-			break;
-		case FDM_EXCEPT:
-			sret = select(fd + 1, NULL, NULL, &fds, pto);
-			break;
-		default:
-			return -1;
-		}
-
-		if (sret < 0) {
-			switch (errno) {
-			case EINTR:
-				// interrupt signal in select
-				if (verbose >= 2)
-					fprintf(stderr, "%s: EINTR\n", __func__);
-				eagain = 1;
-				break;
-			case EAGAIN:
-				if (verbose >= 2)
-					fprintf(stderr, "%s: EAGAIN\n", __func__);
-				break;
-			default:
-				if (verbose >= 2)
-					fprintf(stderr, "%s: select failed: %s\n", __func__,
-							strerror(errno));
-				return -1;
-			}
-		} else if (sret == 0) {
+	switch (poll_wrapper(fd, fdm, timeout_ms)) {
+		case poll_status_success:
+			return 1;
+		case poll_status_timeout:
 			return -ETIMEDOUT;
-		}
-	} while (eagain);
+		case poll_status_error:
+		default:
+			if (verbose >= 2)
+				fprintf(stderr, "%s: poll_wrapper failed\n", __func__);
+			return -ECONNRESET;
+	}
 
-	return sret;
+	return -ECONNRESET;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_accept(int fd, uint16_t port)
+int socket_accept(int fd, uint16_t port)
 {
 #ifdef WIN32
 	int addr_len;
@@ -1180,12 +1336,12 @@ LIBIMOBILEDEVICE_GLUE_API int socket_accept(int fd, uint16_t port)
 	return result;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_shutdown(int fd, int how)
+int socket_shutdown(int fd, int how)
 {
 	return shutdown(fd, how);
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_close(int fd) {
+int socket_close(int fd) {
 #ifdef WIN32
 	return closesocket(fd);
 #else
@@ -1193,17 +1349,17 @@ LIBIMOBILEDEVICE_GLUE_API int socket_close(int fd) {
 #endif
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_receive(int fd, void *data, size_t length)
+int socket_receive(int fd, void *data, size_t length)
 {
 	return socket_receive_timeout(fd, data, length, 0, RECV_TIMEOUT);
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_peek(int fd, void *data, size_t length)
+int socket_peek(int fd, void *data, size_t length)
 {
 	return socket_receive_timeout(fd, data, length, MSG_PEEK, RECV_TIMEOUT);
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_receive_timeout(int fd, void *data, size_t length, int flags, unsigned int timeout)
+int socket_receive_timeout(int fd, void *data, size_t length, int flags, unsigned int timeout)
 {
 	int res;
 	int result;
@@ -1215,19 +1371,22 @@ LIBIMOBILEDEVICE_GLUE_API int socket_receive_timeout(int fd, void *data, size_t 
 	}
 	// if we get here, there _is_ data available
 	result = recv(fd, data, length, flags);
-	if (res > 0 && result == 0) {
+	if (result == 0) {
 		// but this is an error condition
 		if (verbose >= 3)
 			fprintf(stderr, "%s: fd=%d recv returned 0\n", __func__, fd);
 		return -ECONNRESET;
 	}
 	if (result < 0) {
+#ifdef WIN32
+		errno = WSAError_to_errno(WSAGetLastError());
+#endif
 		return -errno;
 	}
 	return result;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_send(int fd, void *data, size_t length)
+int socket_send(int fd, void *data, size_t length)
 {
 	int flags = 0;
 	int res = socket_check_fd(fd, FDM_WRITE, SEND_TIMEOUT);
@@ -1237,10 +1396,17 @@ LIBIMOBILEDEVICE_GLUE_API int socket_send(int fd, void *data, size_t length)
 #ifdef MSG_NOSIGNAL
 	flags |= MSG_NOSIGNAL;
 #endif
-	return send(fd, data, length, flags);
+	int s = (int)send(fd, data, length, flags);
+	if (s < 0) {
+#ifdef WIN32
+		errno = WSAError_to_errno(WSAGetLastError());
+#endif
+		return -errno;
+	}
+	return s;
 }
 
-LIBIMOBILEDEVICE_GLUE_API int socket_get_socket_port(int fd, uint16_t *port)
+int socket_get_socket_port(int fd, uint16_t *port)
 {
 #ifdef WIN32
 	int addr_len;
