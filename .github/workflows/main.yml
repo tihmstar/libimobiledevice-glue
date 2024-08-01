@@ -28,6 +28,36 @@ jobs:
           exit 1
          fi
       shell: bash
+    - name: download dependencies
+      env: 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        get_latest_release() {
+          url="https://api.github.com/repos/$1/releases/latest"
+          echo "url: ${url}" >&2
+          curl --silent --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' "${url}" | # Get latest release from GitHub api
+          jq .tag_name  | # Get tag
+          tr -d '"' # Strip quotes
+        }
+        mkdir depdir
+        cd depdir
+        mkdir $BUILDROOT
+        IFS=',' read -r -a deparray <<< "$GIT_DEPENDENCIES"; for d in ${deparray[@]}; do
+          dep=$d
+          if ! echo ${dep} | grep -q '/'; then
+            dep=${{ github.repository_owner }}/${dep}
+          fi
+          echo "Got dependency: ${dep}"
+          tag=$(get_latest_release ${dep});
+          echo "Found tag: $tag"
+          wget "https://github.com/${dep}/releases/download/$tag/$BUILDROOT.zip"
+          unzip -u "$BUILDROOT.zip"
+          rm "$BUILDROOT.zip"
+        done
+        echo "moving dependencies to /"
+        sudo cp -r $BUILDROOT/* /
+        cd ..
+        rm -rf depdir
     - name: prepre buildroot
       run: mkdir $BUILDROOT
     - name: autogen
