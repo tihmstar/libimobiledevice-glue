@@ -1,7 +1,7 @@
 /*
  * utils.c
  * Miscellaneous utilities for string manipulation,
- * file I/O and plist helper.
+ * file I/O, etc.
  *
  * Copyright (c) 2014-2023 Nikias Bassen, All Rights Reserved.
  * Copyright (c) 2013-2014 Martin Szulecki, All Rights Reserved.
@@ -30,7 +30,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef _MSC_VER
 #include <sys/time.h>
+#endif
 #include <inttypes.h>
 #include <ctype.h>
 #include <errno.h>
@@ -218,7 +220,7 @@ char *string_toupper(char* str)
 	char *res = strdup(str);
 	size_t i;
 	for (i = 0; i < strlen(res); i++) {
-		res[i] = toupper(res[i]);
+		res[i] = toupper((unsigned char)res[i]);
 	}
 	return res;
 }

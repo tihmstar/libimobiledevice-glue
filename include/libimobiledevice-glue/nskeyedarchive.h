@@ -50,6 +50,10 @@ enum nskeyedarchive_class_type_t {
 
 typedef struct nskeyedarchive_st *nskeyedarchive_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 LIMD_GLUE_API nskeyedarchive_t nskeyedarchive_new(void);
 LIMD_GLUE_API nskeyedarchive_t nskeyedarchive_new_from_plist(plist_t plist);
 LIMD_GLUE_API nskeyedarchive_t nskeyedarchive_new_from_data(const void* data, uint32_t size);
@@ -57,9 +61,9 @@ LIMD_GLUE_API void nskeyedarchive_free(nskeyedarchive_t ka);
 
 LIMD_GLUE_API void nskeyedarchive_set_top_ref_key_name(nskeyedarchive_t ka, const char* keyname);
 
-LIMD_GLUE_API uint64_t nskeyedarchive_add_top_class(nskeyedarchive_t ka, const char* classname, ...) __attribute__ ((sentinel(0)));
+LIMD_GLUE_API uint64_t nskeyedarchive_add_top_class(nskeyedarchive_t ka, const char* classname, ...);
 LIMD_GLUE_API void nskeyedarchive_add_top_class_uid(nskeyedarchive_t ka, uint64_t uid);
-LIMD_GLUE_API void nskeyedarchive_append_class(nskeyedarchive_t ka, const char* classname, ...) __attribute__ ((sentinel(0)));
+LIMD_GLUE_API void nskeyedarchive_append_class(nskeyedarchive_t ka, const char* classname, ...);
 LIMD_GLUE_API void nskeyedarchive_append_object(nskeyedarchive_t ka, plist_t object);
 
 LIMD_GLUE_API void nskeyedarchive_nsarray_append_item(nskeyedarchive_t ka, uint64_t uid, enum nskeyedarchive_class_type_t type, ...);
@@ -86,5 +90,9 @@ LIMD_GLUE_API int nskeyedarchive_get_class_string_property(nskeyedarchive_t ka, 
 LIMD_GLUE_API int nskeyedarchive_get_class_property(nskeyedarchive_t ka, uint64_t uid, const char* propname, plist_t* value);
 
 LIMD_GLUE_API plist_t nskeyedarchive_to_plist(nskeyedarchive_t ka);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

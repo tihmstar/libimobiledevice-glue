@@ -15,7 +15,7 @@ dnl libtool versioning
 #                 changes to the signature and the semantic)
 #  ? :+1 : ?   == just internal changes
 # CURRENT : REVISION : AGE
-LIBIMOBILEDEVICE_GLUE_SO_VERSION=3:0:3
+LIBIMOBILEDEVICE_GLUE_SO_VERSION=3:3:3
 
 # Check if we have a version defined
 if test -z $PACKAGE_VERSION; then
@@ -39,6 +39,7 @@ PKG_CHECK_MODULES(libplist, libplist-2.0 >= $LIBPLIST_VERSION)
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h])
+AC_CHECK_HEADERS([netpacket/packet.h net/if_dl.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -71,7 +72,24 @@ case ${host_os} in
   *mingw32*|*cygwin*|*msys*)
     AC_MSG_RESULT([${host_os}])
     win32=true
-    AC_DEFINE(WINVER, 0x0501, [minimum Windows version])
+    AC_ARG_WITH([winver],
+      [AS_HELP_STRING([--with-winver], [Set the minimum windows version])],
+      [
+        AS_CASE([${withval}],
+          [0x[[0-9A-Fa-f]]|0x[[0-9A-Fa-f]]*[[0-9A-Fa-f]]], [VAL=${withval}],
+          ['' | *[[!0123456789]]*], [VAL=""],
+          [[[!0]]*], [VAL=${withval}],
+          [VAL=""]
+        )
+        AS_IF([test "x$VAL" != "x"], [
+          AC_DEFINE_UNQUOTED(WINVER, ${VAL}, [minimum Windows version])
+          AC_DEFINE_UNQUOTED(_WIN32_WINNT, ${VAL}, [minimum Windows version])
+        ], [
+          AC_MSG_ERROR([--with-winver expects a hexadecimal value like 0x0600, or a decimal, and must not be 0])
+        ])
+      ],
+      []
+    )
     ;;
   darwin*)
     AC_MSG_RESULT([${host_os}])
@@ -91,25 +109,23 @@ case ${host_os} in
 esac
 AM_CONDITIONAL(WIN32, test x$win32 = xtrue)
 
-# Check if the C compiler supports __attribute__((constructor))
-AC_CACHE_CHECK([wether the C compiler supports constructor/destructor attributes],
-  ac_cv_attribute_constructor, [
-  ac_cv_attribute_constructor=no
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
-    [[
-      static void __attribute__((constructor)) test_constructor(void) {
-      }
-      static void __attribute__((destructor)) test_destructor(void) {
-      }
-    ]], [])],
-    [ac_cv_attribute_constructor=yes]
-  )]
-)
-if test "$ac_cv_attribute_constructor" = "yes"; then
-  AC_DEFINE(HAVE_ATTRIBUTE_CONSTRUCTOR, 1, [Define if the C compiler supports constructor/destructor attributes])
+AC_CHECK_MEMBER(struct dirent.d_type, AC_DEFINE(HAVE_DIRENT_D_TYPE, 1, [define if struct dirent has member d_type]),, [#include <dirent.h>])
+
+CACHED_CFLAGS="$CFLAGS"
+CFLAGS+=" $libplist_CFLAGS -Werror"
+
+# check if libplist has plist_new_unix_date()
+AC_CACHE_CHECK(for plist_new_unix_date, ac_cv_plist_unix_date,
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+		#include <plist/plist.h>
+		]], [[
+			return plist_new_unix_date(0) ? 0 : 1
+		]])],[ac_cv_plist_unix_date=yes],[ac_cv_plist_unix_date=no]))
+if test "$ac_cv_plist_unix_date" = "yes"; then
+	AC_DEFINE(HAVE_PLIST_UNIX_DATE, 1, [Define if libplist has new unix date API (>= 2.7.0)])
 fi
 
-AC_CHECK_MEMBER(struct dirent.d_type, AC_DEFINE(HAVE_DIRENT_D_TYPE, 1, [define if struct dirent has member d_type]),, [#include <dirent.h>])
+CFLAGS="$CACHED_CFLAGS"
 
 AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wmissing-declarations -Wredundant-decls -Wshadow -Wpointer-arith -Wwrite-strings -Wswitch-default -Wno-unused-parameter -fsigned-char -fvisibility=hidden")
 

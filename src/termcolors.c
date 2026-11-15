@@ -22,13 +22,15 @@
 #include "config.h"
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 #include <string.h>
 #include <stdarg.h>
 
@@ -37,7 +39,7 @@
 
 static int use_colors = 0;
 
-#ifdef WIN32
+#ifdef _WIN32
 static int WIN32_LEGACY_MODE = 1;
 static WORD COLOR_RESET_ATTR = 0;
 static WORD DEFAULT_FG_ATTR = 0;
@@ -94,7 +96,7 @@ static int WIN32_LEGACY_MODE = 0;
 
 void term_colors_init()
 {	
-#ifdef WIN32
+#ifdef _WIN32
 	DWORD conmode = 0;
 	h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
 	GetConsoleMode(h_stdout, &conmode);
@@ -135,7 +137,7 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 {
 	int res = 0;
 	int colorize = use_colors;
-#ifdef WIN32
+#ifdef _WIN32
 	struct esc_item {
 		int pos;
 		WORD attr;
@@ -162,7 +164,7 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 		va_end(vargs_copy);
 
 		// then, we need to remove the escape sequences, if any
-#ifdef WIN32
+#ifdef _WIN32
 		// if colorize is on, we need to keep their positions for later
 		struct esc_item* esc_items = NULL;
 		int attr = 0;
@@ -180,10 +182,10 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 		char* end = start + len + 1;
 		while (p < end-1) {
 			char* cur = p;
-			if (*p == '\e' && end-p > 2 && *(p+1) == '[') {
+			if (*p == '\x1b' && end-p > 2 && *(p+1) == '[') {
 				p+=2;
 				if (*p == 'm') {
-#ifdef WIN32
+#ifdef _WIN32
 					attr = COLOR_RESET_ATTR;
 #endif
 					int move_by = (p+1)-cur;
@@ -197,13 +199,13 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 						long lval = strtol(p, &endp, 10);
 						if (!endp || (*endp != ';' && *endp != 'm')) {
 							fprintf(stderr, "\n*** %s: Invalid escape sequence in format string, expected ';' or 'm' ***\n", __func__);
-#ifdef WIN32
+#ifdef _WIN32
 							free(esc_items);
 #endif
 							free(newbuf);
 							return -1;
 						}
-#ifdef WIN32
+#ifdef _WIN32
 						if (colorize) {
 							if (lval >= 0 && lval <= 8) {
 								/* style attributes */
@@ -249,7 +251,7 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 					end -= move_by;
 					p = cur;
 				}
-#ifdef WIN32
+#ifdef _WIN32
 				if (colorize) {
 					esc_items[num_esc].pos = p-start;
 					if (attr & STYLE_DIM) {
@@ -268,12 +270,12 @@ int cvfprintf(FILE* stream, const char* fmt, va_list vargs)
 		if (num_esc == 0) {
 			res = fputs(newbuf, stream);
 			free(newbuf);
-#ifdef WIN32
+#ifdef _WIN32
 			free(esc_items);
 #endif
 			return res;
 		}
-#ifdef WIN32
+#ifdef _WIN32
 		else {
 			p = &newbuf[0];
 			char* lastp = &newbuf[0];

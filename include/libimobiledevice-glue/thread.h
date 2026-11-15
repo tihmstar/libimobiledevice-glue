@@ -25,7 +25,7 @@
 #include <stddef.h>
 #include <libimobiledevice-glue/glue.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 typedef void* HANDLE;
 typedef HANDLE THREAD_T;
 #pragma pack(push, 8)
@@ -66,6 +66,10 @@ typedef pthread_once_t thread_once_t;
 #define THREAD_T_NULL (THREAD_T)NULL
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void* (*thread_func_t)(void* data);
 
 LIMD_GLUE_API int thread_new(THREAD_T* thread, thread_func_t thread_func, void* data);
@@ -76,7 +80,7 @@ LIMD_GLUE_API int thread_alive(THREAD_T thread);
 
 LIMD_GLUE_API int thread_cancel(THREAD_T thread);
 
-#ifdef WIN32
+#ifdef _WIN32
 #undef HAVE_THREAD_CLEANUP
 #else
 #ifdef HAVE_PTHREAD_CANCEL
@@ -98,5 +102,9 @@ LIMD_GLUE_API void cond_destroy(cond_t* cond);
 LIMD_GLUE_API int cond_signal(cond_t* cond);
 LIMD_GLUE_API int cond_wait(cond_t* cond, mutex_t* mutex);
 LIMD_GLUE_API int cond_wait_timeout(cond_t* cond, mutex_t* mutex, unsigned int timeout_ms);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
